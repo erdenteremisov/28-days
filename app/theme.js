@@ -1,11 +1,5 @@
-// Применяет тему к документу. 'system' — снимает ручной атрибут, тогда работает
-// CSS-медиа-запрос prefers-color-scheme; 'light'/'dark' — принудительно фиксирует.
+// Тема теперь всегда явная (light/dark) — вариант 'system' убран по требованию.
+// Атрибут data-theme на <html> выставляется всегда, без auto-detect по ОС.
 export function applyTheme(pref) {
-    const root = document.documentElement;
-    if (pref === 'system') {
-        root.removeAttribute('data-theme');
-    }
-    else {
-        root.setAttribute('data-theme', pref);
-    }
+    document.documentElement.setAttribute('data-theme', pref);
 }

@@ -10,8 +10,8 @@ const ONBOARDING_QUESTIONS: { key: keyof OnboardingAnswers; title: string }[] = 
   { key: 'changeIfUseful', title: 'Если эксперимент окажется полезным, что ты хотел бы изменить?' },
 ];
 
+// Вариант "Системная" убран по требованию - теперь только явный выбор.
 const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
-  { value: 'system', label: 'Системная' },
   { value: 'light', label: 'Светлая' },
   { value: 'dark', label: 'Тёмная' },
 ];
@@ -90,19 +90,19 @@ export async function renderSummary(root: HTMLElement): Promise<void> {
   `;
   root.appendChild(wrap);
 
-  // ---------- Эксперименты ----------
+  // ---------- Эксперименты (текст гипотезы - через textContent, не innerHTML) ----------
   const expEl = wrap.querySelector<HTMLDivElement>('#summary-experiments')!;
   if (experiments.length === 0) {
-    expEl.innerHTML = '<p class="screen-subtitle">Эксперименты появятся здесь после того, как будут описаны в разделе «Эксперимент».</p>';
+    expEl.innerHTML = '<p class="screen-subtitle">Эксперименты появятся здесь после того, как будут сохранены в разделе «Эксперимент».</p>';
   } else {
     for (const exp of experiments) {
       const card = document.createElement('div');
       card.className = 'summary-experiment-card';
       card.innerHTML = `
         <div class="summary-experiment-card__title">Эксперимент №${exp.number}</div>
-        <div class="summary-experiment-card__text">${exp.hypothesis || 'Гипотеза не указана'}</div>
-        ${exp.conclusion ? `<div class="summary-experiment-card__conclusion">Вывод: ${exp.conclusion}</div>` : ''}
+        <div class="summary-experiment-card__text"></div>
       `;
+      card.querySelector('.summary-experiment-card__text')!.textContent = exp.hypothesis || 'Гипотеза не сохранена';
       expEl.appendChild(card);
     }
   }
@@ -113,39 +113,73 @@ export async function renderSummary(root: HTMLElement): Promise<void> {
 
   function renderOnboardingReview(container: HTMLElement, answers: OnboardingAnswers | null): void {
     const current: OnboardingAnswers = answers ?? { concern: '', goal: '', changeIfUseful: '' };
-    container.innerHTML = `
-      ${ONBOARDING_QUESTIONS.map(
-        (q) => `
-        <div class="onboarding-review__item">
-          <div class="onboarding-review__question">${q.title}</div>
-          <div class="onboarding-review__answer">${escapeHtml(current[q.key]) || '<em>не указано</em>'}</div>
-        </div>`
-      ).join('')}
-      <button class="btn btn--secondary btn--block" id="onboarding-edit-btn">Изменить ответы</button>
-    `;
-    container.querySelector('#onboarding-edit-btn')!.addEventListener('click', () => renderOnboardingEdit(container, current));
+    container.innerHTML = '';
+    for (const q of ONBOARDING_QUESTIONS) {
+      const item = document.createElement('div');
+      item.className = 'onboarding-review__item';
+      const question = document.createElement('div');
+      question.className = 'onboarding-review__question';
+      question.textContent = q.title;
+      const answer = document.createElement('div');
+      answer.className = 'onboarding-review__answer';
+      if (current[q.key]) {
+        answer.textContent = current[q.key];
+      } else {
+        const em = document.createElement('em');
+        em.textContent = 'не указано';
+        answer.appendChild(em);
+      }
+      item.appendChild(question);
+      item.appendChild(answer);
+      container.appendChild(item);
+    }
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn btn--secondary btn--block';
+    editBtn.id = 'onboarding-edit-btn';
+    editBtn.textContent = 'Изменить ответы';
+    editBtn.addEventListener('click', () => renderOnboardingEdit(container, current));
+    container.appendChild(editBtn);
   }
 
   function renderOnboardingEdit(container: HTMLElement, current: OnboardingAnswers): void {
-    container.innerHTML = `
-      ${ONBOARDING_QUESTIONS.map(
-        (q) => `
-        <div class="field-group">
-          <label class="field-label">${q.title}</label>
-          <textarea class="input input--textarea" rows="2" data-key="${q.key}">${current[q.key]}</textarea>
-        </div>`
-      ).join('')}
-      <p class="onboarding-edit-note">Изменения не повлияют на промпты, которые ты уже скопировал в AI раньше — только на будущие.</p>
-      <button class="btn btn--primary btn--block" id="onboarding-save-btn">Сохранить</button>
-      <button class="btn btn--ghost btn--block" id="onboarding-cancel-btn">Отмена</button>
-    `;
-    container.querySelector('#onboarding-cancel-btn')!.addEventListener('click', () => renderOnboardingReview(container, current));
-    container.querySelector('#onboarding-save-btn')!.addEventListener('click', async () => {
-      const updated: OnboardingAnswers = { ...current };
-      container.querySelectorAll<HTMLTextAreaElement>('textarea[data-key]').forEach((el) => {
-        const key = el.dataset.key as keyof OnboardingAnswers;
-        updated[key] = el.value.trim();
-      });
+    container.innerHTML = '';
+    const textareaByKey: Record<string, HTMLTextAreaElement> = {};
+    for (const q of ONBOARDING_QUESTIONS) {
+      const group = document.createElement('div');
+      group.className = 'field-group';
+      const label = document.createElement('label');
+      label.className = 'field-label';
+      label.textContent = q.title;
+      const textarea = document.createElement('textarea');
+      textarea.className = 'input input--textarea';
+      textarea.rows = 2;
+      textarea.value = current[q.key];
+      group.appendChild(label);
+      group.appendChild(textarea);
+      container.appendChild(group);
+      textareaByKey[q.key] = textarea;
+    }
+    const note = document.createElement('p');
+    note.className = 'onboarding-edit-note';
+    note.textContent = 'Изменения не повлияют на промты, которые ты уже скопировал в AI раньше — только на будущие.';
+    container.appendChild(note);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn btn--primary btn--block';
+    saveBtn.textContent = 'Сохранить';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn btn--ghost btn--block';
+    cancelBtn.textContent = 'Отмена';
+    container.appendChild(saveBtn);
+    container.appendChild(cancelBtn);
+
+    cancelBtn.addEventListener('click', () => renderOnboardingReview(container, current));
+    saveBtn.addEventListener('click', async () => {
+      const updated: OnboardingAnswers = {
+        concern: textareaByKey.concern.value.trim(),
+        goal: textareaByKey.goal.value.trim(),
+        changeIfUseful: textareaByKey.changeIfUseful.value.trim(),
+      };
       try {
         await setMetaField('onboardingAnswers', updated);
         renderOnboardingReview(container, updated);
@@ -176,7 +210,7 @@ export async function renderSummary(root: HTMLElement): Promise<void> {
       });
     });
   }
-  renderThemeToggle(meta.themePreference ?? 'system');
+  renderThemeToggle(meta.themePreference ?? 'light');
 
   // ---------- Экспорт / импорт / сброс ----------
   const confirmEl = wrap.querySelector<HTMLDivElement>('#settings-confirm')!;
@@ -223,10 +257,4 @@ export async function renderSummary(root: HTMLElement): Promise<void> {
       alert('Не удалось сбросить данные. Попробуй ещё раз.');
     }
   });
-}
-
-function escapeHtml(s: string): string {
-  const div = document.createElement('div');
-  div.textContent = s;
-  return div.innerHTML;
 }

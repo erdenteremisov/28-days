@@ -6,7 +6,8 @@ export interface OnboardingAnswers {
   changeIfUseful: string; // Если эксперимент окажется полезным, что ты хотел бы изменить?
 }
 
-export type ThemePreference = 'system' | 'light' | 'dark';
+// 'system' убран по требованию: теперь только явный выбор пользователя.
+export type ThemePreference = 'light' | 'dark';
 
 export interface MetaData {
   startDateISO: string | null; // дата начала эксперимента, YYYY-MM-DD
@@ -41,21 +42,20 @@ export interface DayEntry {
 
 export type ExperimentStatus = 'upcoming' | 'active' | 'completed';
 
+// Упрощено до одного большого текстового поля: вся структура гипотезы
+// (что изменить, что наблюдать, критерии) уже содержится в тексте, который
+// формулирует внешний AI. Приложение просто хранит и отображает этот текст,
+// не пытаясь парсить его на части.
 export interface Experiment {
-  number: number; // 1, 2 (эксперимент №1, №2). Дни 22-28 - закрепление, отдельный тип.
-  hypothesis: string;
-  reason: string; // почему эта гипотеза появилась
-  change: string; // что именно пользователь меняет
-  expectedResult: string;
+  number: 1 | 2 | 3;
+  hypothesis: string; // текст целиком, как есть, вставленный пользователем из AI
   startDayNumber: number;
   endDayNumber: number;
-  result: string;
-  observations: string;
-  conclusion: string;
   status: ExperimentStatus;
+  updatedAtISO: string;
 }
 
-export type StageId = 'observation' | 'experiment1' | 'experiment2' | 'consolidation' | 'finished';
+export type StageId = 'observation' | 'experiment1' | 'experiment2' | 'experiment3' | 'finished';
 
 export interface Stage {
   id: StageId;
@@ -68,7 +68,7 @@ export const STAGES: Stage[] = [
   { id: 'observation', title: 'Наблюдение', rangeStart: 1, rangeEnd: 7 },
   { id: 'experiment1', title: 'Эксперимент №1', rangeStart: 8, rangeEnd: 14 },
   { id: 'experiment2', title: 'Эксперимент №2', rangeStart: 15, rangeEnd: 21 },
-  { id: 'consolidation', title: 'Закрепление', rangeStart: 22, rangeEnd: 28 },
+  { id: 'experiment3', title: 'Эксперимент №3', rangeStart: 22, rangeEnd: 28 },
 ];
 
 export const TOTAL_DAYS = 28;

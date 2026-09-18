@@ -2,36 +2,38 @@ import { getExperiment, saveExperiment, getMeta } from '../db.js';
 import { calcCurrentDayNumber, todayDateISO } from '../state.js';
 import type { Experiment, ExperimentStatus } from '../types.js';
 
-const EXPERIMENT_RANGES: Record<number, [number, number]> = {
+const EXPERIMENT_RANGES: Record<1 | 2 | 3, [number, number]> = {
   1: [8, 14],
   2: [15, 21],
+  3: [22, 28],
 };
 
-function emptyExperiment(number: number): Experiment {
+function emptyExperiment(number: 1 | 2 | 3): Experiment {
   const [start, end] = EXPERIMENT_RANGES[number];
   return {
     number,
     hypothesis: '',
-    reason: '',
-    change: '',
-    expectedResult: '',
     startDayNumber: start,
     endDayNumber: end,
-    result: '',
-    observations: '',
-    conclusion: '',
     status: 'upcoming',
+    updatedAtISO: new Date().toISOString(),
   };
 }
 
-function computeStatus(number: number, currentDay: number): ExperimentStatus {
+function computeStatus(number: 1 | 2 | 3, currentDay: number): ExperimentStatus {
   const [start, end] = EXPERIMENT_RANGES[number];
   if (currentDay < start) return 'upcoming';
   if (currentDay > end) return 'completed';
   return 'active';
 }
 
-export async function renderExperiment(root: HTMLElement, openNumber?: number): Promise<void> {
+const STATUS_LABEL: Record<ExperimentStatus, string> = {
+  upcoming: 'Ещё не начат',
+  active: 'Идёт сейчас',
+  completed: 'Завершён',
+};
+
+export async function renderExperiment(root: HTMLElement, openNumber?: 1 | 2 | 3): Promise<void> {
   root.innerHTML = '<div class="screen-loading">Загрузка…</div>';
 
   let meta;
@@ -53,8 +55,8 @@ export async function renderExperiment(root: HTMLElement, openNumber?: number): 
     return;
   }
 
-  const [exp1, exp2] = await Promise.all([getExperiment(1), getExperiment(2)]);
-  const items = [exp1 ?? emptyExperiment(1), exp2 ?? emptyExperiment(2)].map((e) => ({
+  const [exp1, exp2, exp3] = await Promise.all([getExperiment(1), getExperiment(2), getExperiment(3)]);
+  const items = [exp1 ?? emptyExperiment(1), exp2 ?? emptyExperiment(2), exp3 ?? emptyExperiment(3)].map((e) => ({
     ...e,
     status: computeStatus(e.number, currentDay),
   }));
@@ -62,41 +64,43 @@ export async function renderExperiment(root: HTMLElement, openNumber?: number): 
   root.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'screen experiment-screen';
-  wrap.innerHTML = `<h1 class="screen-title">Эксперименты</h1>`;
-
-  const STATUS_LABEL: Record<ExperimentStatus, string> = {
-    upcoming: 'Ещё не начат',
-    active: 'Идёт сейчас',
-    completed: 'Завершён',
-  };
+  const title = document.createElement('h1');
+  title.className = 'screen-title';
+  title.textContent = 'Эксперименты';
+  wrap.appendChild(title);
 
   for (const exp of items) {
     const card = document.createElement('button');
     card.className = 'experiment-card';
+    // Собираем разметку из безопасных, статичных частей, а текст гипотезы
+    // (пользовательский ввод) вставляем отдельно через textContent, а не
+    // через innerHTML - это защищает от XSS даже если гипотеза содержит
+    // символы, которые выглядят как HTML-теги.
     card.innerHTML = `
       <div class="experiment-card__header">
         <span class="experiment-card__number">Эксперимент №${exp.number}</span>
         <span class="experiment-card__status experiment-card__status--${exp.status}">${STATUS_LABEL[exp.status]}</span>
       </div>
-      <div class="experiment-card__hypothesis">${exp.hypothesis || 'Гипотеза ещё не сформулирована'}</div>
+      <div class="experiment-card__hypothesis"></div>
       <div class="experiment-card__days">Дни ${exp.startDayNumber}–${exp.endDayNumber}</div>
     `;
-    card.addEventListener('click', () => renderDetail(exp.number));
+    const hypothesisEl = card.querySelector<HTMLDivElement>('.experiment-card__hypothesis')!;
+    hypothesisEl.textContent = exp.hypothesis || 'Гипотеза ещё не сохранена';
+    card.addEventListener('click', () => renderDetail(exp.number as 1 | 2 | 3));
     wrap.appendChild(card);
   }
 
   const hint = document.createElement('p');
   hint.className = 'experiment-hint';
   hint.textContent =
-    'Гипотезу для каждого эксперимента предложит AI-анализ предыдущей недели — скопируй её сюда после того, как обсудишь результаты с AI.';
+    'Гипотезу для каждого эксперимента формулирует AI по итогам недельного анализа — скопируй готовый блок из ответа AI и вставь его сюда целиком.';
   wrap.appendChild(hint);
 
   root.appendChild(wrap);
 
-  async function renderDetail(number: number): Promise<void> {
+  async function renderDetail(number: 1 | 2 | 3): Promise<void> {
     root.innerHTML = '<div class="screen-loading">Загрузка…</div>';
     const existing = (await getExperiment(number)) ?? emptyExperiment(number);
-    const status = computeStatus(number, currentDay);
 
     root.innerHTML = '';
     const detail = document.createElement('div');
@@ -104,52 +108,26 @@ export async function renderExperiment(root: HTMLElement, openNumber?: number): 
     detail.innerHTML = `
       <button class="link-back" id="exp-back">‹ Все эксперименты</button>
       <h1 class="screen-title">Эксперимент №${number}</h1>
+      <p class="screen-subtitle">Вставь сюда весь блок гипотезы, который тебе сформулировал AI — целиком, как есть.</p>
       <div class="field-group">
-        <label class="field-label">Гипотеза</label>
-        <textarea class="input input--textarea" id="exp-hypothesis" rows="2" placeholder="Например: большое количество коротких видео вечером связано с более низкой энергией утром">${existing.hypothesis}</textarea>
-      </div>
-      <div class="field-group">
-        <label class="field-label">Почему эта гипотеза появилась</label>
-        <textarea class="input input--textarea" id="exp-reason" rows="2">${existing.reason}</textarea>
-      </div>
-      <div class="field-group">
-        <label class="field-label">Что именно ты меняешь</label>
-        <textarea class="input input--textarea" id="exp-change" rows="2" placeholder="Например: 7 дней не смотреть Shorts/Reels после 21:00">${existing.change}</textarea>
-      </div>
-      <div class="field-group">
-        <label class="field-label">Ожидаемый результат</label>
-        <textarea class="input input--textarea" id="exp-expected" rows="2">${existing.expectedResult}</textarea>
-      </div>
-      <div class="field-group">
-        <label class="field-label">Наблюдения по ходу эксперимента</label>
-        <textarea class="input input--textarea" id="exp-observations" rows="2">${existing.observations}</textarea>
-      </div>
-      <div class="field-group">
-        <label class="field-label">Результат</label>
-        <textarea class="input input--textarea" id="exp-result" rows="2">${existing.result}</textarea>
-      </div>
-      <div class="field-group">
-        <label class="field-label">Вывод</label>
-        <textarea class="input input--textarea" id="exp-conclusion" rows="2">${existing.conclusion}</textarea>
+        <textarea class="input input--textarea experiment-hypothesis-textarea" id="exp-hypothesis" rows="10" placeholder="ЭКСПЕРИМЕНТ ${number}&#10;&#10;МОЯ ГИПОТЕЗА:&#10;..."></textarea>
       </div>
       <button class="btn btn--primary btn--block" id="exp-save">Сохранить</button>
-      <div class="save-confirm" id="exp-save-confirm" hidden>Сохранено ✓</div>
+      <div class="save-confirm" id="exp-save-confirm" hidden>Сохранено</div>
     `;
     root.appendChild(detail);
 
+    // Значение вставляем через .value, а не в innerHTML/textContent верстки -
+    // безопасно даже если сохранённый текст содержит спецсимволы.
+    const textarea = detail.querySelector<HTMLTextAreaElement>('#exp-hypothesis')!;
+    textarea.value = existing.hypothesis;
+
     detail.querySelector('#exp-back')!.addEventListener('click', () => renderExperiment(root));
     detail.querySelector('#exp-save')!.addEventListener('click', async () => {
-      const get = (id: string) => detail.querySelector<HTMLTextAreaElement>(id)!.value.trim();
       const updated: Experiment = {
         ...existing,
-        status,
-        hypothesis: get('#exp-hypothesis'),
-        reason: get('#exp-reason'),
-        change: get('#exp-change'),
-        expectedResult: get('#exp-expected'),
-        observations: get('#exp-observations'),
-        result: get('#exp-result'),
-        conclusion: get('#exp-conclusion'),
+        hypothesis: textarea.value.trim(),
+        updatedAtISO: new Date().toISOString(),
       };
       try {
         await saveExperiment(updated);

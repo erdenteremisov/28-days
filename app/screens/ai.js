@@ -1,6 +1,9 @@
 import { getAllDays, getAllExperiments, getMeta } from '../db.js';
 import { calcCurrentDayNumber, todayDateISO, addDaysISO, formatDateHuman } from '../state.js';
 import { buildWeek1Prompt, buildWeek2Prompt, buildWeek3Prompt, buildFinalPrompt } from '../ai-prompt.js';
+function daysInRange(all, start, end) {
+    return all.filter((d) => d.dayNumber >= start && d.dayNumber <= end);
+}
 export async function renderAi(root) {
     root.innerHTML = '<div class="screen-loading">Загрузка…</div>';
     let meta, days, experiments;
@@ -22,30 +25,30 @@ export async function renderAi(root) {
         {
             id: 'week1',
             title: 'Анализ недели 1 (дни 1–7)',
-            description: 'Первые закономерности и гипотеза для эксперимента №1.',
+            description: 'Первые наблюдения и гипотеза для эксперимента №1.',
             minDay: 7,
-            build: (allDays, _exps, m) => buildWeek1Prompt(m, allDays.filter((d) => d.dayNumber <= 7)),
+            build: (allDays, _exps, m) => buildWeek1Prompt(m, daysInRange(allDays, 1, 7)),
         },
         {
             id: 'week2',
             title: 'Анализ недели 2 (дни 8–14)',
-            description: 'Проверка эксперимента №1 с учётом первой недели.',
+            description: 'Проверка эксперимента №1.',
             minDay: 14,
-            build: (allDays, exps, m) => buildWeek2Prompt(m, allDays.filter((d) => d.dayNumber <= 14), exps.find((e) => e.number === 1)),
+            build: (allDays, exps, m) => buildWeek2Prompt(m, daysInRange(allDays, 1, 7), daysInRange(allDays, 8, 14), exps.find((e) => e.number === 1)),
         },
         {
             id: 'week3',
             title: 'Анализ недели 3 (дни 15–21)',
-            description: 'Повторяющиеся паттерны и оба эксперимента.',
+            description: 'Повторяемость паттернов и гипотеза для эксперимента №3.',
             minDay: 21,
-            build: (allDays, exps, m) => buildWeek3Prompt(m, allDays.filter((d) => d.dayNumber <= 21), exps.find((e) => e.number === 1), exps.find((e) => e.number === 2)),
+            build: (allDays, exps, m) => buildWeek3Prompt(m, daysInRange(allDays, 1, 7), daysInRange(allDays, 8, 14), daysInRange(allDays, 15, 21), exps.find((e) => e.number === 1), exps.find((e) => e.number === 2)),
         },
         {
             id: 'final',
             title: 'Финальное интервью (дни 1–28)',
-            description: 'Полный разбор всех 28 дней и следующий эксперимент.',
+            description: 'Полный разбор 28 дней и три итоговые формулировки.',
             minDay: 28,
-            build: (allDays, exps, m) => buildFinalPrompt(m, allDays, exps.find((e) => e.number === 1), exps.find((e) => e.number === 2)),
+            build: (allDays, exps, m) => buildFinalPrompt(m, daysInRange(allDays, 1, 7), daysInRange(allDays, 8, 14), daysInRange(allDays, 15, 21), daysInRange(allDays, 22, 28), exps.find((e) => e.number === 1), exps.find((e) => e.number === 2), exps.find((e) => e.number === 3)),
         },
     ];
     root.innerHTML = '';
@@ -81,10 +84,11 @@ export async function renderAi(root) {
       <div class="ai-prompt">
         <div class="ai-prompt__label">${opt.title}</div>
         <textarea class="input input--textarea ai-prompt__text" id="ai-prompt-text" rows="10" readonly></textarea>
-        <button class="btn btn--primary btn--block" id="ai-copy">СКОПИРОВАТЬ ПРОМПТ</button>
-        <div class="save-confirm" id="ai-copy-confirm" hidden>Промпт скопирован.</div>
+        <button class="btn btn--primary btn--block" id="ai-copy">Скопировать промт</button>
+        <div class="save-confirm" id="ai-copy-confirm" hidden>Промт скопирован</div>
       </div>
     `;
+        // Текст промпта - через .value, а не через innerHTML/интерполяцию строки.
         const textarea = outputEl.querySelector('#ai-prompt-text');
         textarea.value = text;
         outputEl.scrollIntoView({ behavior: 'smooth', block: 'start' });

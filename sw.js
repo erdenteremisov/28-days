@@ -3,7 +3,7 @@
 // всё работало офлайн. Пользовательские данные тут ни при чём — они
 // живут только в IndexedDB на устройстве и никогда не проходят через сеть.
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `experiment28-shell-${CACHE_VERSION}`;
 
 const APP_SHELL = [

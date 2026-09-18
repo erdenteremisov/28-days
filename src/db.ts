@@ -68,7 +68,7 @@ const DEFAULT_META: MetaData = {
   onboardingCompleted: false,
   lastSeenDay: 0,
   dismissedPrompts: [],
-  themePreference: 'system',
+  themePreference: 'light',
 };
 
 export async function getMeta(): Promise<MetaData> {
@@ -76,7 +76,12 @@ export async function getMeta(): Promise<MetaData> {
     const rows = await tx<any[]>(STORE_META, 'readonly', (s) => s.getAll());
     const map: Record<string, any> = {};
     for (const row of rows) map[row.key] = row.value;
-    return { ...DEFAULT_META, ...map };
+    const merged = { ...DEFAULT_META, ...map };
+    // Миграция: раньше существовал вариант темы 'system', теперь только light/dark.
+    if (merged.themePreference !== 'light' && merged.themePreference !== 'dark') {
+      merged.themePreference = 'light';
+    }
+    return merged;
   } catch (err) {
     console.error('getMeta failed, falling back to defaults', err);
     return { ...DEFAULT_META };

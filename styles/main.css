@@ -25,26 +25,10 @@
   color-scheme: light;
 }
 
-/* Тёмная тема: следует системной настройке по умолчанию, либо ручной выбор
-   через data-theme на <html> (см. Итог → Оформление). Палитра не инвертирует
-   в чистый чёрный/белый — тёплый тёмный грифель вместо OLED-черноты, чтобы
-   сохранить тот же "спокойный журнал", а не "техно" ощущение. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --paper: #1b1e19;
-    --paper-raised: #262a22;
-    --ink: #ece8df;
-    --ink-soft: #a5a89c;
-    --line: #3a3e35;
-    --sage: #93bc9e;
-    --sage-soft: #2b3a2f;
-    --clay: #e0a468;
-    --clay-soft: #3c2f22;
-    --danger: #e08b76;
-    color-scheme: dark;
-  }
-}
-
+/* Тёмная тема: только явный выбор пользователя (Итог → Оформление),
+   без автоопределения по системе — вариант "Системная" убран из UI.
+   Палитра не инвертирует в чистый чёрный/белый — тёплый тёмный грифель
+   вместо OLED-черноты, чтобы сохранить тот же "спокойный журнал". */
 :root[data-theme='dark'] {
   --paper: #1b1e19;
   --paper-raised: #262a22;
@@ -57,6 +41,19 @@
   --clay-soft: #3c2f22;
   --danger: #e08b76;
   color-scheme: dark;
+}
+
+/* Double-tap-zoom и фантомная прокрутка при быстром двойном тапе:
+   touch-action: manipulation убирает именно двойной тап-зум и 300мс
+   задержку клика, но НЕ трогает pinch-zoom (доступность масштабирования
+   сохраняется) - в отличие от grubого решения через maximum-scale в viewport. */
+html {
+  touch-action: manipulation;
+}
+
+button, a, input, textarea, .icon-scale__option, .experiment-card, .ai-option {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 * {
@@ -78,16 +75,22 @@ body {
 }
 
 #app {
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  position: relative;
 }
 
+/* Нижняя навигация зафиксирована у низа экрана и не уезжает при скролле
+   контента — контент скроллится независимо внутри .screen-container. */
 .screen-container {
-  flex: 1;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   overflow-y: auto;
-  padding: 20px 20px calc(24px + env(safe-area-inset-bottom));
+  -webkit-overflow-scrolling: touch;
+  padding: 20px 20px calc(96px + env(safe-area-inset-bottom));
   max-width: 560px;
   width: 100%;
   margin: 0 auto;
@@ -192,6 +195,11 @@ body {
 
 .bottom-nav {
   display: flex;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
   border-top: 1px solid var(--line);
   background: var(--paper-raised);
   padding-bottom: env(safe-area-inset-bottom);
@@ -855,4 +863,42 @@ body {
   background: transparent;
   color: var(--danger);
   border: 1px solid var(--danger);
+}
+
+/* ---------- Онбординг v2: один экран, интервью-помощник ---------- */
+
+.onboarding__divider {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.onboarding__helper-text {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.5;
+  text-align: center;
+  margin: 0 0 12px;
+}
+
+.onboarding__helper-text--small {
+  font-size: 12px;
+  margin: 10px 0 0;
+}
+
+/* ---------- Эксперимент v2: одно большое поле гипотезы ---------- */
+
+.experiment-hypothesis-textarea {
+  min-height: 220px;
+}
+
+.experiment-saved-view {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  padding: 14px;
+  margin-bottom: 14px;
+  white-space: pre-wrap;
+  font-size: 14.5px;
+  line-height: 1.5;
 }

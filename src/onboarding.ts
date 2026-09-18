@@ -1,5 +1,6 @@
 import { setMetaField } from './db.js';
 import { todayDateISO } from './state.js';
+import { STARTER_INTERVIEW_PROMPT } from './ai-prompt.js';
 import type { OnboardingAnswers } from './types.js';
 
 const QUESTIONS: { key: keyof OnboardingAnswers; title: string; placeholder: string }[] = [
@@ -21,66 +22,54 @@ const QUESTIONS: { key: keyof OnboardingAnswers; title: string; placeholder: str
 ];
 
 export function renderOnboarding(root: HTMLElement, onFinished: () => void): void {
-  let step = 0;
-  const answers: OnboardingAnswers = { concern: '', goal: '', changeIfUseful: '' };
+  root.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'onboarding';
+  wrap.innerHTML = `
+    <div class="onboarding__eyebrow">28 дней — личный эксперимент</div>
+    <h1 class="onboarding__title">Прежде чем начать</h1>
+    <p class="onboarding__text">Ответь на три коротких вопроса — они станут отправной точкой для всего эксперимента.</p>
 
-  function renderIntro(): void {
-    root.innerHTML = '';
-    const wrap = document.createElement('div');
-    wrap.className = 'onboarding';
-    wrap.innerHTML = `
-      <div class="onboarding__eyebrow">28 дней — личный эксперимент</div>
-      <h1 class="onboarding__title">Собери данные о своих днях, проверь пару гипотез и пойми, что стоит менять.</h1>
-      <p class="onboarding__text">Это не курс и не марафон. Никто не обещает найти твоё предназначение за 28 дней. Это просто маленький личный эксперимент: наблюдение → гипотеза → проверка → вывод.</p>
-      <button class="btn btn--primary btn--block" id="ob-start">Начать</button>
-      <p class="privacy-note">Все ответы и данные хранятся только на этом устройстве и никуда не отправляются.</p>
-    `;
-    root.appendChild(wrap);
-    wrap.querySelector('#ob-start')!.addEventListener('click', () => {
-      step = 1;
-      renderQuestion();
-    });
+    <div class="field-list" id="onboarding-fields"></div>
+
+    <button class="btn btn--primary btn--block" id="ob-save">Сохранить</button>
+
+    <div class="onboarding__divider">
+      <p class="onboarding__helper-text">Не знаешь, что писать?<br/>Пройди короткое интервью — станет понятнее.</p>
+      <button class="btn btn--secondary btn--block" id="ob-copy-interview">Скопировать промт для интервью</button>
+      <div class="save-confirm" id="ob-copy-confirm" hidden>Промт скопирован</div>
+      <p class="onboarding__helper-text onboarding__helper-text--small">Вставь его в ChatGPT, Claude или Gemini, пройди интервью, а готовый результат вставь обратно в поля выше.</p>
+    </div>
+
+    <p class="privacy-note">Все ответы и данные хранятся только на этом устройстве и никуда не отправляются.</p>
+  `;
+  root.appendChild(wrap);
+
+  const fieldsEl = wrap.querySelector<HTMLDivElement>('#onboarding-fields')!;
+  const textareas: Record<string, HTMLTextAreaElement> = {};
+
+  for (const q of QUESTIONS) {
+    const group = document.createElement('div');
+    group.className = 'field-group';
+    const label = document.createElement('label');
+    label.className = 'field-label';
+    label.textContent = q.title;
+    const textarea = document.createElement('textarea');
+    textarea.className = 'input input--textarea';
+    textarea.rows = 3;
+    textarea.placeholder = q.placeholder;
+    group.appendChild(label);
+    group.appendChild(textarea);
+    fieldsEl.appendChild(group);
+    textareas[q.key] = textarea;
   }
 
-  function renderQuestion(): void {
-    root.innerHTML = '';
-    const q = QUESTIONS[step - 1];
-    const wrap = document.createElement('div');
-    wrap.className = 'onboarding';
-    wrap.innerHTML = `
-      <div class="onboarding__progress">Вопрос ${step} из ${QUESTIONS.length}</div>
-      <h1 class="onboarding__title">${q.title}</h1>
-      <textarea class="input input--textarea" id="ob-answer" rows="4" placeholder="${q.placeholder}"></textarea>
-      <button class="btn btn--primary btn--block" id="ob-next">${step < QUESTIONS.length ? 'Дальше' : 'Начинаем 28 дней'}</button>
-      ${step > 1 ? '<button class="btn btn--ghost btn--block" id="ob-back">Назад</button>' : ''}
-    `;
-    root.appendChild(wrap);
-
-    const textarea = wrap.querySelector<HTMLTextAreaElement>('#ob-answer')!;
-    textarea.value = answers[q.key];
-    textarea.focus();
-
-    wrap.querySelector('#ob-next')!.addEventListener('click', async () => {
-      answers[q.key] = textarea.value.trim();
-      if (step < QUESTIONS.length) {
-        step += 1;
-        renderQuestion();
-      } else {
-        await finish();
-      }
-    });
-
-    const back = wrap.querySelector('#ob-back');
-    if (back) {
-      back.addEventListener('click', () => {
-        answers[q.key] = textarea.value.trim();
-        step -= 1;
-        renderQuestion();
-      });
-    }
-  }
-
-  async function finish(): Promise<void> {
+  wrap.querySelector('#ob-save')!.addEventListener('click', async () => {
+    const answers: OnboardingAnswers = {
+      concern: textareas.concern.value.trim(),
+      goal: textareas.goal.value.trim(),
+      changeIfUseful: textareas.changeIfUseful.value.trim(),
+    };
     try {
       await setMetaField('onboardingAnswers', answers);
       await setMetaField('startDateISO', todayDateISO());
@@ -90,7 +79,28 @@ export function renderOnboarding(root: HTMLElement, onFinished: () => void): voi
       console.error('Failed to save onboarding', err);
       alert('Не удалось сохранить ответы. Проверь, что в браузере разрешено хранение данных, и попробуй ещё раз.');
     }
-  }
+  });
 
-  renderIntro();
+  wrap.querySelector('#ob-copy-interview')!.addEventListener('click', async () => {
+    const confirm = wrap.querySelector<HTMLDivElement>('#ob-copy-confirm')!;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(STARTER_INTERVIEW_PROMPT);
+      } else {
+        const tmp = document.createElement('textarea');
+        tmp.value = STARTER_INTERVIEW_PROMPT;
+        tmp.style.position = 'fixed';
+        tmp.style.opacity = '0';
+        document.body.appendChild(tmp);
+        tmp.select();
+        document.execCommand('copy');
+        document.body.removeChild(tmp);
+      }
+      confirm.hidden = false;
+      setTimeout(() => (confirm.hidden = true), 2500);
+    } catch (err) {
+      console.error('Copy failed', err);
+      alert('Не удалось скопировать автоматически. Попробуй выделить и скопировать текст вручную.');
+    }
+  });
 }
